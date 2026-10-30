@@ -1,0 +1,45 @@
+# [[.Name]] plugin for CLIProxyAPI
+
+Native [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) (CPA) plugin that adds [[.Name]] as a provider, built on [cpa-provider-kit](https://[[.KitModule]]).
+
+- **Sign-in:** paste an API key in a browser page served by CPA[[if .KeyURL]] (create one at <[[.KeyURL]]>)[[end]]. Several keys are load-balanced.
+- **Models:** [[range $i, $m := .Models]][[if $i]], [[end]]`[[$m]]`[[end]], plus any listed in the `extra-models` setting.
+- **Requests:** passed through untranslated to [[.Name]]'s native endpoints[[if .ChatPath]], Chat Completions `[[.ChatPath]]`[[end]][[if .AnthropicPath]], Anthropic Messages `[[.AnthropicPath]]`[[end]][[if .ResponsesPath]], Responses `[[.ResponsesPath]]`[[end]]. CPA translates other client protocols.
+
+## Requirements
+
+- CPA v8.0.47 or newer, running natively for its machine. Use the `aarch64` EasyCLIProxyAPI build on Apple Silicon; the Intel build runs under Rosetta and crashes when it loads Go plugins.
+
+## Build and install
+
+```bash
+make test
+make build      # dist/<goos>/<goarch>/[[.ID]].<ext>
+make install    # copies into EasyCLIProxyAPI's plugins dir (override PLUGINS_DIR)
+```
+
+Or install `dist/<goos>/<goarch>/[[.ID]].<ext>` from EasyCLIProxyAPI's Plugins page. Then enable the plugin there or in `config.yaml`:
+
+```yaml
+plugins:
+  enabled: true
+  configs:
+    [[.ID]]:
+      enabled: true
+      # base-url: [[.BaseURL]]
+      # extra-models: []
+```
+
+Keep the library named `[[.ID]].<ext>` (or `[[.ID]]-v<version>.<ext>`); CPA derives the plugin ID from the file name.
+
+## Add a key
+
+Start the sign-in for `[[.ID]]` in EasyCLIProxyAPI (or `GET /v8/management/oauth/auth-url?provider=[[.ID]]`) and paste the key in the page that opens. For a remote CPA, upload an auth file instead:
+
+```json
+{ "type": "[[.ID]]", "api_key": "<key>", "label": "optional" }
+```
+
+## Release
+
+Push a `v<version>` tag. `.github/workflows/release.yml` tests, builds Linux, macOS, and Windows libraries, and publishes `[[.ID]]_<version>_<goos>_<goarch>.zip` plus `checksums.txt` — the layout CPA's plugin store installs from.[[if .KitReplace]] Before the first release, publish cpa-provider-kit and remove the `replace` line from `go.mod`; CI cannot see the local checkout.[[end]]

@@ -1,0 +1,18 @@
+// Command [[.ID]] builds the [[.Name]] plugin library for CLIProxyAPI
+// (go build -buildmode=c-shared; see Makefile).
+package main
+
+import (
+	"[[.KitModule]]/abi"
+	"[[.KitModule]]/kit"
+	"[[.Module]]/internal/provider"
+)
+
+// pluginVersion is set at build time: -ldflags "-X main.pluginVersion=1.2.3".
+var pluginVersion = "0.0.0"
+
+func init() {
+	abi.Register(func(host kit.Host) abi.Handler { return kit.New(provider.Spec(pluginVersion), host) })
+}
+
+func main() {}

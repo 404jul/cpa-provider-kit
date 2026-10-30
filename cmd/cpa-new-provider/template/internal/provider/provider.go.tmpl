@@ -1,0 +1,62 @@
+// Package provider declares the [[.Name]] provider for CLIProxyAPI.
+//
+// Everything the plugin does is driven by Spec; see the kit package docs for
+// optional hooks (Quota, ListModels, custom AuthHandler/Executor, Passthrough
+// Headers/Body/Token).
+package provider
+
+import (
+	"[[.KitModule]]/kit"
+)
+
+// ID is the provider key (auth file "type") and plugin ID. The built library
+// must be named [[.ID]].<ext> (or [[.ID]]-v<version>.<ext>).
+const ID = [[quote .ID]]
+
+// Spec describes the provider; version is injected at build time.
+func Spec(version string) *kit.Spec {
+	return &kit.Spec{
+		ID:         ID,
+		Name:       [[quote .Name]],
+		Version:    version,
+		Author:     [[quote .Author]],
+		Repository: [[quote .Repository]],
+		BaseURL:    [[quote .BaseURL]],
+
+		// Static catalog. Users can add more IDs with the extra-models setting.
+		Models: []kit.Model{
+[[- range .Models]]
+			{ID: [[quote .]]},
+[[- end]]
+		},
+
+		Auth: &kit.APIKeyAuth{
+			KeyURL: [[quote .KeyURL]],
+[[- if .ValidatePath]]
+			// Checks submitted keys; 401/403 rejects them.
+			Validate: kit.ValidateWithGET([[quote .ValidatePath]]),
+[[- end]]
+		},
+
+		// Upstream routes per client protocol. CPA translates other protocols
+		// (e.g. Gemini clients) into one of these.
+		Executor: &kit.Passthrough{Endpoints: map[kit.Format]kit.Endpoint{
+[[- if .ChatPath]]
+			kit.FormatChat: {Path: [[quote .ChatPath]]},
+[[- end]]
+[[- if .AnthropicPath]]
+			kit.FormatClaude: {Path: [[quote .AnthropicPath]][[if .CountTokensPath]], CountTokensPath: [[quote .CountTokensPath]][[end]]},
+[[- end]]
+[[- if .ResponsesPath]]
+			kit.FormatResponses: {Path: [[quote .ResponsesPath]]},
+[[- end]]
+		}},
+
+		Errors: kit.ErrorPolicy{CodeStatus: func(code string) int { return codeStatuses[code] }},
+	}
+}
+
+// codeStatuses maps the provider's business error codes (from error bodies) to
+// HTTP statuses so CPA cools credentials down correctly: 401 bad key,
+// 403 forbidden, 429 quota or rate limit. Unlisted codes keep the upstream status.
+var codeStatuses = map[string]int{}

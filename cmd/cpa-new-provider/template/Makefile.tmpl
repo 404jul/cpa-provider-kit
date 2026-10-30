@@ -1,0 +1,44 @@
+PLUGIN_ID   := [[.ID]]
+VERSION     ?= 0.1.0
+# Build with the Go release the CPA core uses (v8.0.47: go1.26.10); the plugin
+# runs a second Go runtime inside the core process.
+GOTOOLCHAIN ?= go1.26.10
+export GOTOOLCHAIN
+
+GOOS   ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+EXT_darwin  := dylib
+EXT_linux   := so
+EXT_freebsd := so
+EXT_windows := dll
+EXT := $(EXT_$(GOOS))
+LIB := dist/$(GOOS)/$(GOARCH)/$(PLUGIN_ID).$(EXT)
+
+# EasyCLIProxyAPI on macOS keeps the core and its plugins/ directory here.
+PLUGINS_DIR ?= $(HOME)/Library/Application Support/com.cpa.gui/cpa-core/plugins
+
+.PHONY: build test package install clean
+
+build:
+	@mkdir -p $(dir $(LIB))
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -buildmode=c-shared -trimpath \
+		-ldflags "-s -w -X main.pluginVersion=$(VERSION)" -o $(LIB) .
+	@rm -f $(basename $(LIB)).h
+
+test:
+	go vet ./...
+	go test ./...
+
+# Plugin-store asset for this platform: dist/release/<id>_<version>_<goos>_<goarch>.zip
+# plus an updated dist/release/checksums.txt.
+package: build
+	go run [[.KitModule]]/cmd/cpa-package -id $(PLUGIN_ID) -version $(VERSION) \
+		-goos $(GOOS) -goarch $(GOARCH) -lib $(LIB) -out dist/release
+
+install: build
+	@mkdir -p "$(PLUGINS_DIR)/$(GOOS)/$(GOARCH)"
+	cp $(LIB) "$(PLUGINS_DIR)/$(GOOS)/$(GOARCH)/$(PLUGIN_ID).$(EXT)"
+	@echo "Installed $(PLUGINS_DIR)/$(GOOS)/$(GOARCH)/$(PLUGIN_ID).$(EXT)"
+
+clean:
+	rm -rf dist

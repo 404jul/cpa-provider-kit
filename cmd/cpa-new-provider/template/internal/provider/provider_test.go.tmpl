@@ -1,0 +1,46 @@
+package provider
+
+import (
+	"testing"
+
+	"[[.KitModule]]/kit"
+	"[[.KitModule]]/kit/kittest"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
+)
+
+func TestSpecIsValid(t *testing.T) {
+	if err := Spec("0.0.0").Check(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Every declared protocol must reach its upstream route with the credential
+// and CPA's resolved model name.
+func TestRequestsReachUpstreamEndpoints(t *testing.T) {
+	spec := Spec("0.0.0")
+	passthrough, ok := spec.Executor.(*kit.Passthrough)
+	if !ok {
+		t.Skip("custom executor")
+	}
+	host := &kittest.Host{Do: func(pluginapi.HTTPRequest) pluginapi.HTTPResponse {
+		return pluginapi.HTTPResponse{StatusCode: 200, Body: []byte(`{"id":"ok"}`)}
+	}}
+	plugin := kit.New(spec, host)
+	kittest.Register(t, plugin, "")
+	authFile := `{"type":"` + ID + `","api_key":"test-key"}`
+	for format, endpoint := range passthrough.Endpoints {
+		kittest.MustCall(t, plugin, pluginabi.MethodExecutorExecute, kittest.Exec(format, "resolved-model", `{"model":"alias"}`, authFile), nil)
+		requests := host.Requests()
+		sent := requests[len(requests)-1]
+		if want := spec.BaseURL + endpoint.Path; sent.URL != want {
+			t.Errorf("%s: URL %s, want %s", format, sent.URL, want)
+		}
+		if string(sent.Body) != `{"model":"resolved-model"}` {
+			t.Errorf("%s: body %s", format, sent.Body)
+		}
+		if sent.Headers.Get("Authorization") == "" && sent.Headers.Get("X-Api-Key") == "" {
+			t.Errorf("%s: credential not sent", format)
+		}
+	}
+}
